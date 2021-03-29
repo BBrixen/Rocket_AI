@@ -1,5 +1,5 @@
 from simulation import launch
-from physics import apply_physics, bounds, max_value_names
+from physics import apply_physics, bounds, all_value_names
 
 import tensorflow as tf
 from tensorflow.keras import layers, models
@@ -14,21 +14,21 @@ assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
 config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 # -------------------------------training-------------------------------
-max_games = 20
+max_games = 10
 num_of_games = 0
 training_frequency = 5
-randomize_constant = 20  # stops being random after [randomize_constant] many games
+randomize_constant = 10  # stops being random after [randomize_constant] many games
 previous_x = 0
 all_max_ys = []  # so i can see the progression if there is any
 all_max_xs = []
 overall_training_data = set()
 
-loading_model = False
+loading_model = True
 saving_model = True
 
 # -------------------------------model architecture-------------------------------
 model = models.Sequential([
-    layers.Flatten(input_shape=(8,)),
+    layers.Flatten(input_shape=(9,)),
     layers.Dense(30, activation='relu'),
     layers.Dense(2, activation='sigmoid')
     # softmax is for classification of many different things
@@ -75,6 +75,7 @@ class Rocket:
         # new components for 2d:
         self.state['x'] = int(bounds['max_x'] / 2)
         self.state['x_tilt'] = 0.25  # this is a value from 0 to 1,
+        self.state['x_direction'] = 0.25
         # unit circle from 0-1, where 0 and 1 are 2pi (directly right), 0.5 is directly left, and 0.25 is straight up
 
         # overall data
@@ -120,7 +121,6 @@ class Rocket:
 
         # updating crashes
         if not self.state['has_left_ground'] and self.state['y'] > 0:
-            print('the rocket has left the ground')
             self.state['has_left_ground'] = True
         elif self.state['has_left_ground'] and self.state['y'] <= 0:
             # the rocket has crashed or took too long
@@ -198,12 +198,13 @@ class Rocket:
 
         squished_array = np.array([left_ground_bool])
 
-        for name in max_value_names:
+        for name in all_value_names:
             max_str = 'max_' + name
-            cur_val = self.state[name] / bounds[max_str]
+            cur_val = self.state[name]
+            # the two values without a max are x_tilt and x_direction, which are both between 0 and 1
+            if max_str in bounds:
+                cur_val /= bounds[max_str]
             squished_array = np.append(squished_array, cur_val)
-
-        squished_array = np.append(squished_array, self.state['x_tilt'])
 
         return squished_array
 
@@ -215,9 +216,6 @@ def train(training_set):
     # converting set of tuples of lists into 2 2d lists
     inputs = [list(input_data) for input_data, output_data in training_set]
     outputs = [list(output_data) for input_data, output_data in training_set]
-
-    print(inputs)
-    print(outputs)
 
     model.fit(inputs, outputs, epochs=10, verbose=1, callbacks=[checkpoint_callback])
     if saving_model:
