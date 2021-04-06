@@ -5,17 +5,17 @@ white = (255, 255, 255)
 light_green = (100, 255, 100)
 blue = (100, 100, 255)
 black = (0, 0, 0)
-X = 1000
+X = 1500
 Y = 1000
 pygame.init()
 display = pygame.display.set_mode((X, Y))
 pygame.display.set_caption('Rocket GUI')
 font = pygame.font.Font('freesansbold.ttf', 32)
 clock = pygame.time.Clock()
-clock_speed = 60  # frames per second
+CLOCK_SPEED = 60  # frames per second
 
-pixels = []
-old_pixels = []
+x_pixels = set()
+z_pixels = set()
 
 
 def handle_display(state, iteration):
@@ -39,9 +39,9 @@ def handle_display(state, iteration):
     iteration_text_rect.center = (180, 40*(len(all_value_names)+1))
     display.blit(iteration_text, iteration_text_rect)
 
-    for pixel in old_pixels:
-        display.set_at(pixel, blue)
-    for pixel in pixels:
+    for pixel in x_pixels:
+        display.set_at(pixel, light_green)
+    for pixel in z_pixels:
         display.set_at(pixel, light_green)
 
     for event in pygame.event.get():
@@ -53,10 +53,10 @@ def handle_display(state, iteration):
 
 
 def launch(rocket, iteration):
-    global pixels
-    global old_pixels
+    global x_pixels, z_pixels
 
-    pixels = []
+    x_pixels = set()
+    z_pixels = set()
     crashed = False
     user_exit = False
     while True:
@@ -67,28 +67,40 @@ def launch(rocket, iteration):
         if crashed or user_exit:
             break
         user_exit = handle_display(state, iteration)
-        clock.tick(clock_speed)
+        clock.tick(CLOCK_SPEED)
+    if user_exit:
+        return
 
-    # for pixel in pixels:
-    #     old_pixels.append(pixel)
     rocket.has_crashed()
 
 
 def add_pixels(state):
-    global pixels
+    global x_pixels, z_pixels
 
-    x = X - int(state['x'] / 10)
+    x = int((X/2)) - int(state['x'] / 20)  # X/2 to get the first half of the screen
+    z = X - int(state['z'] / 20)   # not dividing to get 2nd half of the screen
     y = Y - int(state['y'])  # this is / by nothing because y is very low
-    pixels.append((x, y))
+    x_pixels.add((x, y))
+    z_pixels.add((z, y))
 
     # making it a 2x2 box
-    pixels.append((x + 1, y))
-    pixels.append((x, y + 1))
-    pixels.append((x + 1, y + 1))
+    x_pixels.add((x + 1, y))
+    x_pixels.add((x, y + 1))
+    x_pixels.add((x + 1, y + 1))
+
+    z_pixels.add((z + 1, y))
+    z_pixels.add((z, y + 1))
+    z_pixels.add((z + 1, y + 1))
 
     # making it a 3x3 box
-    pixels.append((x + 2, y))
-    pixels.append((x + 2, y + 1))
-    pixels.append((x, y + 2))
-    pixels.append((x + 1, y + 2))
-    pixels.append((x + 2, y + 2))
+    x_pixels.add((x + 2, y))
+    x_pixels.add((x + 2, y + 1))
+    x_pixels.add((x, y + 2))
+    x_pixels.add((x + 1, y + 2))
+    x_pixels.add((x + 2, y + 2))
+
+    z_pixels.add((z + 2, y))
+    z_pixels.add((z + 2, y + 1))
+    z_pixels.add((z, y + 2))
+    z_pixels.add((z + 1, y + 2))
+    z_pixels.add((z + 2, y + 2))

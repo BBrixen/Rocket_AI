@@ -1,5 +1,5 @@
 from simulation import launch
-from physics import apply_physics, bounds, all_value_names
+from physics import *
 
 import tensorflow as tf
 from tensorflow.keras import layers, models
@@ -14,23 +14,26 @@ assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
 config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 # -------------------------------training-------------------------------
-max_games = 10
+MAX_GAMES = 20
 num_of_games = 0
-training_frequency = 5
-randomize_constant = 10  # stops being random after [randomize_constant] many games
+TRAINING_FREQUENCY = 5
+RANDOMIZE_CONSTANT = MAX_GAMES  # stops being random after [randomize_constant] many games
 previous_x = 0
+previous_z = 0
 all_max_ys = []  # so i can see the progression if there is any
 all_max_xs = []
+all_max_zs = []
 overall_training_data = set()
 
-loading_model = True
-saving_model = True
+LOADING_MODEL = True
+SAVING_MODEL = True
 
 # -------------------------------model architecture-------------------------------
+INPUT_SIZE = len(all_value_names) + 1  # +1 to account for has_left_ground
 model = models.Sequential([
-    layers.Flatten(input_shape=(9,)),
+    layers.Flatten(input_shape=(12,)),
     layers.Dense(30, activation='relu'),
-    layers.Dense(2, activation='sigmoid')
+    layers.Dense(3, activation='sigmoid')
     # softmax is for classification of many different things
     # (like classifying between 10 different animals)
     # sigmoid compresses the value between 0 and 1 but not for classification
@@ -40,24 +43,22 @@ model.compile(optimizer='adam',
               metrics=['accuracy'])
 
 # -------------------------------checkpoints-------------------------------
-checkpoint_dir = '../../rocket_v5_checkpoints'
+checkpoint_dir = '../../rocket_v4_checkpoints'
 checkpoint_prefix = os.path.join(checkpoint_dir, 'ckpt_{epoch}')
 checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
     filepath=checkpoint_prefix,
     save_weights_only=True
 )
 
-if loading_model:
-    model = models.load_model('rocket_v5.h5')
+if LOADING_MODEL:
+    model = models.load_model('rocket_v4.h5')
 
 
 class Rocket:
-    # TODO: add new components for 3d, everywhere there is x variables, there also need to be z
     def __init__(self):
         # current state data
         self.state = {}
         self.reset_state()
-
         # training data
         self.training_data = set()
 
@@ -65,31 +66,39 @@ class Rocket:
 
     def reset_state(self):
         # resets all values for first or next run
-        # current state
         self.state['y'] = 0
         self.state['velocity'] = 0
         self.state['acceleration'] = 0
         self.state['has_left_ground'] = False
         self.state['fuel'] = bounds['max_fuel']
-        
-        # new components for 2d:
+
+        # x axis
         self.state['x'] = int(bounds['max_x'] / 2)
         self.state['x_tilt'] = 0.25  # this is a value from 0 to 1,
         self.state['x_direction'] = 0.25
         # unit circle from 0-1, where 0 and 1 are 2pi (directly right), 0.5 is directly left, and 0.25 is straight up
 
+        # z axis
+        self.state['z'] = int(bounds['max_z'] / 2)
+        self.state['z_tilt'] = 0.25
+        self.state['z_direction'] = 0.25
+
         # overall data
         self.state['time'] = 0  # measured in frames, not seconds
         self.state['max_y'] = 0
         self.state['max_x'] = 0
+        self.state['max_z'] = 0
         self.state['max_velocity'] = 0
         self.state['max_acceleration'] = 0
 
+        # preparing the new environment for a new simulation
+        init_env()
+
     def update(self, actions, predictions, squished_state):
         # this function updates the current state of the rocket depending on the ai output
-        global previous_x
+        global previous_x, previous_z
 
-        self.state = apply_physics(self.state, actions)
+        self.state = apply_physics(self.state, actions)  # big boi math
 
         use_data = False
         if self.state['acceleration'] > 0:
@@ -99,10 +108,14 @@ class Rocket:
         # 1: if the x-distance from the middle value is increasing, set use_data to False
         # 2: if the x-distance from the middle value is decreasing, set use_data to True
         cur_x = abs(self.state['x'] - (0.5 * bounds['max_x']))
+        cur_z = abs(self.state['z'] - (0.5 * bounds['max_z']))
         if cur_x <= previous_x:
             # method 2
             use_data = True
+        if cur_z <= previous_z:
+            use_data = True
         previous_x = cur_x
+        previous_z = cur_z
 
         if use_data is True:
             # adding state and output to current rocket training data
@@ -112,18 +125,19 @@ class Rocket:
         # updating overall data
         if self.state['acceleration'] > self.state['max_acceleration']:
             self.state['max_acceleration'] = self.state['acceleration']
-        if self.state['y'] > self.state['max_y']:
-            self.state['max_y'] = self.state['y']
         if self.state['velocity'] > self.state['max_velocity']:
             self.state['max_velocity'] = self.state['velocity']
+        if self.state['y'] > self.state['max_y']:
+            self.state['max_y'] = self.state['y']
         if cur_x > self.state['max_x']:
             self.state['max_x'] = cur_x
+        if cur_z > self.state['max_z']:
+            self.state['max_z'] = cur_z
 
         # updating crashes
         if not self.state['has_left_ground'] and self.state['y'] > 0:
             self.state['has_left_ground'] = True
         elif self.state['has_left_ground'] and self.state['y'] <= 0:
-            # the rocket has crashed or took too long
             return self.state, True
         elif self.state['time'] >= bounds['max_time']:
             return self.state, True
@@ -131,19 +145,23 @@ class Rocket:
         return self.state, False
 
     def fly(self):
-        # this is where the ai will give an output
 
-        actions = {}
+        # need to apply wind and other environmental effects
+        # this will only change the values of the wind magnitude and angle, but not affect the rocket yet
+
+        # this is where the ai will give an output
         squished_state = self.squish_state()  # accessing current state of rocket for inputs
         predictions = model.predict(np.array([squished_state]))  # generating command based on state
         predictions = predictions[0]  # accessing array of values from 2d array given
         predictions = randomize_output(predictions)  # adding a level of randomness for ai training
-        # print('predictions after randomization:', predictions)
-        actions['thrust'] = predictions[0]  # accessing the variable needed from the array(s) given
-        actions['x_tilt_gain'] = predictions[1]
 
-        return self.update(actions, predictions, squished_state)
+        actions = {'thrust': predictions[0],
+                   'x_tilt_gain': predictions[1],
+                   'z_tilt_gain': predictions[2]}
+
         # calling the update function to change the rockets current state
+        # inside update, we will use the environmental values from before and applies the physics to the rocket
+        return self.update(actions, predictions, squished_state)
 
     def has_crashed(self):
         # the rocket has crashed and we are now moving onto another iteration
@@ -152,37 +170,36 @@ class Rocket:
         global num_of_games
         global overall_training_data
         global model
-        global all_max_ys
-        global all_max_xs
+        global all_max_ys, all_max_xs, all_max_zs
 
         # printing overall data for me
-        print('rocket #', str(num_of_games+1), 'crashed')
+        print('rocket #', str(num_of_games + 1), 'crashed')
         print('max y:', self.state['max_y'])
         print('max_x:', self.state['max_x'])
+        print('max_z:', self.state['max_z'])
         print('max velocity:', self.state['max_velocity'])
         print('max acceleration:', self.state['max_acceleration'])
         print('time:', self.state['time'])
 
         all_max_ys.append(self.state['max_y'])
         all_max_xs.append(self.state['max_x'])
-        for data in self.training_data:
-            overall_training_data.add(data)
+        all_max_zs.append(self.state['max_z'])
 
-        if num_of_games is not 0 and num_of_games % training_frequency is 0 and len(overall_training_data) is not 0:
+        # adding all values from current training data into overall training data
+        overall_training_data = overall_training_data.union(self.training_data)
+
+        if num_of_games is not 0 and num_of_games % TRAINING_FREQUENCY is 0 and len(overall_training_data) is not 0:
             # we only train every few games, and not every rocket is added to training data,
-            # so we first check if we should train after the current game, and we check if there is data to train with
             train(overall_training_data)
             # resetting the training arrays to not over train
             overall_training_data = set()
 
         # preparing for next launch
         self.reset_state()
-
-        # resetting rocket training data
         self.training_data = set()
 
         num_of_games += 1
-        if num_of_games >= max_games:
+        if num_of_games >= MAX_GAMES:
             return
         print('finished game #', num_of_games)
 
@@ -191,7 +208,6 @@ class Rocket:
 
     def squish_state(self):
         # squishing values between 0 and 1
-        # all training and prediction values must be between 0 and 1
         left_ground_bool = 0
         if self.state['has_left_ground']:
             left_ground_bool = 1
@@ -218,8 +234,8 @@ def train(training_set):
     outputs = [list(output_data) for input_data, output_data in training_set]
 
     model.fit(inputs, outputs, epochs=10, verbose=1, callbacks=[checkpoint_callback])
-    if saving_model:
-        model.save('rocket_v5.h5')
+    if SAVING_MODEL:
+        model.save('rocket_v4.h5')
 
 
 def randomize_output(predicted_outputs):
@@ -228,23 +244,25 @@ def randomize_output(predicted_outputs):
     new_outputs = np.array([])
     for predicted_output in predicted_outputs:
         rand = randint(0, 100)
-        random_rate = randomize_constant*(1-num_of_games/randomize_constant)
+        random_rate = RANDOMIZE_CONSTANT * (1 - num_of_games / RANDOMIZE_CONSTANT)
         if rand < random_rate:
-            new_outputs = np.append(new_outputs, abs(1-predicted_output))
+            new_outputs = np.append(new_outputs, abs(1 - predicted_output))
         else:
             new_outputs = np.append(new_outputs, predicted_output)
 
     return new_outputs
 
 
-myself = Rocket()
-# plt.subplot(4, 5, 1)
+al = Rocket()
 y = np.linspace(1, len(all_max_ys), len(all_max_ys))
-plt.plot(y, all_max_ys, 'o-', color='b')
+plt.plot(y, all_max_ys, 'o-', color='g')
 
 x = np.linspace(1, len(all_max_xs), len(all_max_xs))
 plt.plot(x, all_max_xs, 'o-', color='r')
-plt.xlabel("Rocket")
-plt.ylabel("Value (blue = y, red = x)")
+
+z = np.linspace(1, len(all_max_zs), len(all_max_zs))
+plt.plot(z, all_max_zs, 'o-', color='b')
+plt.xlabel("Rocket Iteration")
+plt.ylabel("Value r, g, b = x, y, z")
 plt.title('Rocket data')
-plt.savefig('rocket_v5.png')
+plt.savefig('rocket_v4.png')
