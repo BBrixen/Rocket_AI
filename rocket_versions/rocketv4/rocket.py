@@ -25,14 +25,15 @@ all_max_xs = []
 all_max_zs = []
 overall_training_data = set()
 
-LOADING_MODEL = True
+LOADING_MODEL = False
 SAVING_MODEL = True
 
 # -------------------------------model architecture-------------------------------
 INPUT_SIZE = len(all_value_names) + 1  # +1 to account for has_left_ground
 model = models.Sequential([
-    layers.Flatten(input_shape=(12,)),
+    layers.Flatten(input_shape=(INPUT_SIZE,)),
     layers.Dense(30, activation='relu'),
+    layers.Dense(10, activation='relu'),
     layers.Dense(3, activation='sigmoid')
     # softmax is for classification of many different things
     # (like classifying between 10 different animals)
@@ -40,6 +41,7 @@ model = models.Sequential([
 ])
 model.compile(optimizer='adam',
               loss='categorical_crossentropy',
+              # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
               metrics=['accuracy'])
 
 # -------------------------------checkpoints-------------------------------
@@ -91,8 +93,10 @@ class Rocket:
         self.state['max_velocity'] = 0
         self.state['max_acceleration'] = 0
 
-        # preparing the new environment for a new simulation
+        # environmental data
         init_env()
+        self.state['wind'] = 0
+        self.state['wind_direction'] = 0
 
     def update(self, actions, predictions, squished_state):
         # this function updates the current state of the rocket depending on the ai output
@@ -146,8 +150,7 @@ class Rocket:
 
     def fly(self):
 
-        # need to apply wind and other environmental effects
-        # this will only change the values of the wind magnitude and angle, but not affect the rocket yet
+        self.state = apply_environment(self.state)
 
         # this is where the ai will give an output
         squished_state = self.squish_state()  # accessing current state of rocket for inputs
@@ -217,7 +220,7 @@ class Rocket:
         for name in all_value_names:
             max_str = 'max_' + name
             cur_val = self.state[name]
-            # the two values without a max are x_tilt and x_direction, which are both between 0 and 1
+            # the only values without a max are tilt and directions, which are already between 0 and 1
             if max_str in bounds:
                 cur_val /= bounds[max_str]
             squished_array = np.append(squished_array, cur_val)

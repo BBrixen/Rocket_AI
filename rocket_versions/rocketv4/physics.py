@@ -3,15 +3,25 @@ import numpy as np
 from perlin_noise import PerlinNoiseFactory
 
 # -------------------------------physics constants-------------------------------
-ACCELERATION_FROM_THRUST = 20  # how much the acceleration increases from thrust
-ACCELERATION_FROM_GRAVITY = -9.8
+# from now on this is measured in meters per frame
+# if we want meters per second we must define that 1 frame is 1 second
+FORCE_FROM_THRUST = 800  # how much the acceleration increases from thrust, measured in N
 THRUST_PER_UNIT_FUEL = 1  # how much thrust from 1 unit of fuel
-TILT_RATIO = 0.2
-ACCELERATION_FROM_WIND = 1
+TILT_RATIO = 0  # how much the rocket tilts in frame
+FORCE_FROM_WIND = 1  # multiplied by wind (value from 0-100), measured in N
+MASS = 20  # kg
+ACCELERATION_FROM_GRAVITY = -9.8
+FORCE_FROM_GRAVITY = MASS * ACCELERATION_FROM_GRAVITY  # currently -196N
+# drag
+DRAG_COEFFICIENT = 0.55
+RADIUS = 0.1  # measured in meters. radius is 10cm
+CROSS_SECTIONAL_AREA = math.pi * RADIUS**2  # this is measured in meters
+AIR_DENSITY = 1.225  # kg/m^3
 
 # -------------------------------classification-------------------------------
+# current max velocity is 136m/s
 bounds = {'max_acceleration': 100,  # this is also used for preprocessing
-          'max_velocity': 1000,
+          'max_velocity': math.sqrt((-2*FORCE_FROM_GRAVITY) / (AIR_DENSITY*CROSS_SECTIONAL_AREA*DRAG_COEFFICIENT)),
           'max_y': 10000,
           'min_y': 0,
           'max_fuel': 10,
@@ -20,7 +30,7 @@ bounds = {'max_acceleration': 100,  # this is also used for preprocessing
           'min_x': 0,
           'max_z': 10000,
           'min_z': 0,
-          'max_wind': 1,
+          'max_wind': 100,
           'min_wind': 0}
 
 all_value_names = ['acceleration', 'velocity', 'y', 'fuel', 'time', 'x', 'x_tilt', 'x_direction', 'z', 'z_tilt',
@@ -31,33 +41,30 @@ all_value_names = ['acceleration', 'velocity', 'y', 'fuel', 'time', 'x', 'x_tilt
 max_value_names = ['acceleration', 'velocity', 'y', 'fuel', 'time', 'x', 'z', 'wind']
 # the names of all data fields that have a max
 min_value_names = ['y', 'x', 'z']  # the names of all data fields that have a min
+angles = ['x_tilt', 'x_direction', 'z_tilt', 'z_direction', 'wind_direction']
 
 
 # -------------------------------environment constants-------------------------------
 wind_mags = []
 wind_angles = []
-rt2 = math.sqrt(2)
 
 
 def init_env():
+    # i might want to transform the curves to better fit a realistic environment
     global wind_mags, wind_angles
-    x_noise_generator = PerlinNoiseFactory(1, octaves=2, unbias=False)
-    z_noise_generator = PerlinNoiseFactory(1, octaves=3, unbias=False)
+    mags_noise_generator = PerlinNoiseFactory(1, octaves=2, unbias=True)
+    angle_noise_generator = PerlinNoiseFactory(1, octaves=3, unbias=True)
     div = 10
-    x_noise = [(x_noise_generator(i/div)+1)/2 for i in range(bounds['max_time'])]
-    z_noise = [(z_noise_generator(i/div)+1)/2 for i in range(bounds['max_time'])]
-    wind_mags = []
-    wind_angles = []
-    for i in range(bounds['max_time']):
-        x_point = x_noise_generator(i/div) * rt2
-        z_point = x_noise_generator(i/div) * rt2
-        wind_mags.append(math.sqrt(x_point ** 2 + z_point ** 2))
-        wind_angles.append(math.atan2(z_noise[i], x_noise[i]))
+    # 50* instead of 100/2*
+    wind_mags = [50*(mags_noise_generator(i/div)+1) for i in range(bounds['max_time'])]
+    wind_angles = [(angle_noise_generator(i/div)+1)/2 for i in range(bounds['max_time'])]
 
 
 def apply_physics(state, actions):
     # this is called after the ai has made its decision
     # recalculating fuel consumption when low on fuel
+
+    # actions['thrust'] = 1  # sets the rocket to turbo mode
     thrust = actions['thrust']
     max_thrust = state['fuel'] * THRUST_PER_UNIT_FUEL
     if thrust >= max_thrust:
@@ -75,8 +82,9 @@ def apply_physics(state, actions):
     # converting from 0-1 to 0-2pi
     vel_angle_x_projection = state['x_direction'] * 2 * math.pi
     vel_angle_z_projection = state['z_direction'] * 2 * math.pi
-    acc_angle_x_projection = state['x_tilt'] * 2 * math.pi
-    acc_angle_z_projection = state['z_tilt'] * 2 * math.pi
+    force_angle_x_projection = state['x_tilt'] * 2 * math.pi
+    force_angle_z_projection = state['z_tilt'] * 2 * math.pi
+    wind_angle = state['wind_direction'] * 2 * math.pi
 
     # calculating angles for velocity using direction
     vel_z_component = math.cos(vel_angle_z_projection)
@@ -85,16 +93,32 @@ def apply_physics(state, actions):
     vel_x_component = vel_xy_projection * math.cos(vel_angle_x_projection)
 
     # calculating angles for acceleration using tilt
-    acc_z_component = math.cos(acc_angle_z_projection)
-    acc_xy_projection = math.sin(vel_angle_z_projection)
-    acc_y_component = acc_xy_projection * math.sin(acc_angle_x_projection)
-    acc_x_component = acc_xy_projection * math.cos(acc_angle_x_projection)
+    force_z_component = math.cos(force_angle_z_projection)
+    force_xy_projection = math.sin(force_angle_z_projection)
+    force_y_component = force_xy_projection * math.sin(force_angle_x_projection)
+    force_x_component = force_xy_projection * math.cos(force_angle_x_projection)
 
-    # calculating x, y, z acceleration from components
-    cur_acceleration = thrust * ACCELERATION_FROM_THRUST
-    acceleration_y = (cur_acceleration * acc_y_component) + ACCELERATION_FROM_GRAVITY
-    acceleration_x = cur_acceleration * acc_x_component
-    acceleration_z = cur_acceleration * acc_z_component
+    # calculating wind components
+    wind_z_component = math.cos(wind_angle)
+    wind_x_component = math.sin(wind_angle)
+    wind_z = FORCE_FROM_WIND * state['wind'] * wind_z_component
+    wind_x = FORCE_FROM_WIND * state['wind'] * wind_x_component
+
+    # calculating drag force:
+    drag = 0.5 * DRAG_COEFFICIENT * CROSS_SECTIONAL_AREA * state['velocity']**2 * AIR_DENSITY
+    drag *= -1 * np.sign(state['velocity'])  # this way drag is constantly working against the direction of the rocket
+
+    # calculating x, y, z force from components
+    cur_force = thrust * FORCE_FROM_THRUST
+    force_y = cur_force * force_y_component + FORCE_FROM_GRAVITY + drag
+    print('net y force:', force_y)
+    force_x = cur_force * force_x_component + wind_x
+    force_z = cur_force * force_z_component + wind_z
+
+    # translating force into acceleration
+    acceleration_y = force_y / MASS
+    acceleration_x = force_x / MASS
+    acceleration_z = force_z / MASS
 
     # calculating and storing new magnitude
     cur_acceleration = math.sqrt((acceleration_x ** 2 + acceleration_y ** 2 + acceleration_z ** 2))
@@ -145,7 +169,10 @@ def apply_physics(state, actions):
 
 
 def apply_environment(state):
-    pass
+    cur_time = state['time']
+    state['wind'] = wind_mags[cur_time]
+    state['wind_direction'] = wind_angles[cur_time]
+    return state
 
 
 def apply_bounds(state):
@@ -165,6 +192,6 @@ def apply_bounds(state):
 
 
 def apply_unit_circle(state):
-    state['x_tilt'] %= 1  # applies unit circle
-    state['z_tilt'] %= 1
+    for angle in angles:
+        state[angle] %= 1
     return state
