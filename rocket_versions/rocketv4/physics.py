@@ -111,7 +111,6 @@ def apply_physics(state, actions):
     # calculating x, y, z force from components
     cur_force = thrust * FORCE_FROM_THRUST
     force_y = cur_force * force_y_component + FORCE_FROM_GRAVITY + drag
-    print('net y force:', force_y)
     force_x = cur_force * force_x_component + wind_x
     force_z = cur_force * force_z_component + wind_z
 
