@@ -1,10 +1,12 @@
 import pygame
-from physics import all_value_names
+from physics import bounds
+import math
 
 white = (255, 255, 255)
 light_green = (100, 255, 100)
 blue = (100, 100, 255)
 black = (0, 0, 0)
+orange = (252, 115, 3)  # fuel color
 X = 1500
 Y = 1000
 pygame.init()
@@ -12,32 +14,107 @@ display = pygame.display.set_mode((X, Y))
 pygame.display.set_caption('Rocket GUI')
 font = pygame.font.Font('freesansbold.ttf', 32)
 clock = pygame.time.Clock()
-CLOCK_SPEED = 60  # frames per second
+CLOCK_SPEED = 30  # frames per second
 
 x_pixels = set()
 z_pixels = set()
 
 
 def handle_display(state, iteration):
+    LINE_LENGTH = 50
+
     display.fill(black)
-    y = 0
-    base_x = 250
-    x_change_per_letter = 8
-    for name in all_value_names:
-        new_x = base_x - x_change_per_letter * len(name)
-        text_str = name + ":" + str(round(state[name], 3))
-        text = font.render(text_str, True, white, black)
-        text_rect = text.get_rect()
-        y += 40
-        text_rect.center = (new_x, y)
-        display.blit(text, text_rect)
 
     # iteration
     iteration_str = 'Iteration: ' + str(iteration)
     iteration_text = font.render(iteration_str, True, white, black)
     iteration_text_rect = iteration_text.get_rect()
-    iteration_text_rect.center = (180, 40*(len(all_value_names)+1))
+    iteration_text_rect.center = (100, LINE_LENGTH)
     display.blit(iteration_text, iteration_text_rect)
+
+    # velocity in x:
+    vel_x_text = font.render('x velocity:', True, white, black)
+    vel_x_text_rect = vel_x_text.get_rect()
+    vel_x_text_rect.center = (300, LINE_LENGTH)
+    display.blit(vel_x_text, vel_x_text_rect)
+    vel_center = (450, LINE_LENGTH)
+    vel_line_length = abs(state['velocity']/bounds['max_velocity']) * LINE_LENGTH
+    angle = state['x_direction'] * 2 * math.pi
+    vel_x_component = -1*vel_line_length * math.cos(angle) + vel_center[0]
+    vel_y_component = -1*vel_line_length * math.sin(angle) + vel_center[1]
+    vel_end = (vel_x_component, vel_y_component)
+    pygame.draw.circle(display, white, vel_center, LINE_LENGTH, width=1)
+    pygame.draw.line(display, white, vel_center, vel_end)
+
+    # velocity in z:
+    vel_z_text = font.render('z velocity:', True, white, black)
+    vel_z_text_rect = vel_z_text.get_rect()
+    vel_z_text_rect.center = (670, LINE_LENGTH)
+    display.blit(vel_z_text, vel_z_text_rect)
+    vel_center = (820, LINE_LENGTH)
+    angle = state['z_direction'] * 2 * math.pi
+    vel_x_component = -1 * vel_line_length * math.cos(angle) + vel_center[0]
+    vel_y_component = -1 * vel_line_length * math.sin(angle) + vel_center[1]
+    vel_end = (vel_x_component, vel_y_component)
+    pygame.draw.circle(display, white, vel_center, LINE_LENGTH, width=1)
+    pygame.draw.line(display, white, vel_center, vel_end)
+
+    # acceleration in x:
+    acc_x_text = font.render('x acceleration:', True, white, black)
+    acc_x_text_rect = acc_x_text.get_rect()
+    acc_x_text_rect.center = (270, 4*LINE_LENGTH)
+    display.blit(acc_x_text, acc_x_text_rect)
+    acc_center = (450, 4*LINE_LENGTH)
+    acc_line_length = abs(state['acceleration']/bounds['max_acceleration']) * LINE_LENGTH
+    angle = state['x_tilt'] * 2 * math.pi
+    acc_x_component = -1 * acc_line_length * math.cos(angle) + acc_center[0]
+    acc_y_component = -1 * acc_line_length * math.sin(angle) + acc_center[1]
+    acc_end = (acc_x_component, acc_y_component)
+    pygame.draw.circle(display, white, acc_center, LINE_LENGTH, width=1)
+    pygame.draw.line(display, white, acc_center, acc_end)
+
+    # acceleration in z:
+    acc_z_text = font.render('z acceleration:', True, white, black)
+    acc_z_text_rect = acc_z_text.get_rect()
+    acc_z_text_rect.center = (640, 4*LINE_LENGTH)
+    display.blit(acc_z_text, acc_z_text_rect)
+    acc_center = (820, 4*LINE_LENGTH)
+    angle = state['z_tilt'] * 2 * math.pi
+    acc_x_component = -1 * acc_line_length * math.cos(angle) + acc_center[0]
+    acc_y_component = -1 * acc_line_length * math.sin(angle) + acc_center[1]
+    acc_end = (acc_x_component, acc_y_component)
+    pygame.draw.circle(display, white, acc_center, LINE_LENGTH, width=1)
+    pygame.draw.line(display, white, acc_center, acc_end)
+
+    # wind
+    wind_text = font.render('wind:', True, white, black)
+    wind_text_rect = wind_text.get_rect()
+    wind_text_rect.center = (1000, LINE_LENGTH)
+    display.blit(wind_text, wind_text_rect)
+    wind_center = (1100, LINE_LENGTH)
+    wind_line_length = abs(state['wind']) * LINE_LENGTH
+    angle = state['wind_direction'] * 2 * math.pi
+    wind_x_component = -1 * wind_line_length * math.cos(angle) + wind_center[0]
+    wind_y_component = -1 * wind_line_length * math.sin(angle) + wind_center[1]
+    wind_end = (wind_x_component, wind_y_component)
+    pygame.draw.circle(display, white, wind_center, LINE_LENGTH, width=1)
+    pygame.draw.line(display, white, wind_center, wind_end)
+
+    # fuel
+    fuel_text = font.render('fuel:', True, white, black)
+    fuel_text_rect = fuel_text.get_rect()
+    fuel_text_rect.center = (1000, 4*LINE_LENGTH)
+    display.blit(fuel_text, fuel_text_rect)
+    fuel_center = (1100, 3*LINE_LENGTH)
+    fuel_size = (LINE_LENGTH/2, LINE_LENGTH*2)
+    fuel_ratio = state['fuel']/bounds['max_fuel']
+    fuel_height = int(2*LINE_LENGTH * fuel_ratio)
+    actual_size = (LINE_LENGTH/2, fuel_height)
+    outline_rect = pygame.Rect(fuel_center[0], fuel_center[1], fuel_size[0], fuel_size[1])
+    starting_y = fuel_center[1] + (1 - fuel_ratio) * fuel_size[1]
+    actual_rect = pygame.Rect(fuel_center[0], starting_y, actual_size[0], actual_size[1])
+    pygame.draw.rect(display, white, outline_rect, width=1)
+    pygame.draw.rect(display, orange, actual_rect)
 
     for pixel in x_pixels:
         display.set_at(pixel, light_green)
@@ -77,9 +154,9 @@ def launch(rocket, iteration):
 def add_pixels(state):
     global x_pixels, z_pixels
 
-    x = int((X/2)) - int(state['x'] / 20)  # X/2 to get the first half of the screen
-    z = X - int(state['z'] / 20)   # not dividing to get 2nd half of the screen
-    y = Y - int(state['y'])  # this is / by nothing because y is very low
+    x = int((X/2)) - int(state['x'] / 100)  # X/2 to get the first half of the screen
+    z = X - int(state['z'] / 100)   # not dividing to get 2nd half of the screen
+    y = Y - int(state['y'] / 5)
     x_pixels.add((x, y))
     z_pixels.add((z, y))
 

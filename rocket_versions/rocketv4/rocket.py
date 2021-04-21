@@ -27,6 +27,9 @@ overall_training_data = set()
 
 LOADING_MODEL = False
 SAVING_MODEL = True
+TRAINING_METHOD = 1
+# method 1: set training_data to false if the rocket is moving away from the vertical origin
+# method 2: set training_data to true if the rocket it moving towards the vertical origin
 
 # -------------------------------model architecture-------------------------------
 INPUT_SIZE = len(all_value_names) + 1  # +1 to account for has_left_ground
@@ -113,11 +116,17 @@ class Rocket:
         # 2: if the x-distance from the middle value is decreasing, set use_data to True
         cur_x = abs(self.state['x'] - (0.5 * bounds['max_x']))
         cur_z = abs(self.state['z'] - (0.5 * bounds['max_z']))
-        if cur_x <= previous_x:
-            # method 2
-            use_data = True
-        if cur_z <= previous_z:
-            use_data = True
+        if TRAINING_METHOD == 1:
+            if cur_x > previous_x:
+                use_data = False
+            if cur_z > previous_z:
+                use_data = False
+        else:
+            if cur_x <= previous_x:
+                # method 2
+                use_data = True
+            if cur_z <= previous_z:
+                use_data = True
         previous_x = cur_x
         previous_z = cur_z
 
