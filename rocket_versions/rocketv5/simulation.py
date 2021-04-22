@@ -20,7 +20,7 @@ x_pixels = set()
 z_pixels = set()
 
 
-def handle_display(state, iteration):
+def handle_display(state, iteration, MULTIPLE_AI):
     LINE_LENGTH = 50
 
     display.fill(black)
@@ -32,12 +32,20 @@ def handle_display(state, iteration):
     iteration_text_rect.center = (100, LINE_LENGTH)
     display.blit(iteration_text, iteration_text_rect)
 
+    num_ai_str = 'one AI'
+    if MULTIPLE_AI:
+        num_ai_str = 'multiple AIs'
+    num_ai_text = font.render(num_ai_str, True, white, black)
+    num_ai_text_rect = num_ai_text.get_rect()
+    num_ai_text_rect.center = (100, 4*LINE_LENGTH)
+    display.blit(num_ai_text, num_ai_text_rect)
+
     # velocity in x:
     vel_x_text = font.render('x velocity:', True, white, black)
     vel_x_text_rect = vel_x_text.get_rect()
-    vel_x_text_rect.center = (300, LINE_LENGTH)
+    vel_x_text_rect.center = (400, LINE_LENGTH)
     display.blit(vel_x_text, vel_x_text_rect)
-    vel_center = (450, LINE_LENGTH)
+    vel_center = (540, LINE_LENGTH)
     vel_line_length = abs(state['velocity']/bounds['max_velocity']) * LINE_LENGTH
     angle = state['x_direction'] * 2 * math.pi
     vel_x_component = -1*vel_line_length * math.cos(angle) + vel_center[0]
@@ -49,9 +57,9 @@ def handle_display(state, iteration):
     # velocity in z:
     vel_z_text = font.render('z velocity:', True, white, black)
     vel_z_text_rect = vel_z_text.get_rect()
-    vel_z_text_rect.center = (670, LINE_LENGTH)
+    vel_z_text_rect.center = (770, LINE_LENGTH)
     display.blit(vel_z_text, vel_z_text_rect)
-    vel_center = (820, LINE_LENGTH)
+    vel_center = (920, LINE_LENGTH)
     angle = state['z_direction'] * 2 * math.pi
     vel_x_component = -1 * vel_line_length * math.cos(angle) + vel_center[0]
     vel_y_component = -1 * vel_line_length * math.sin(angle) + vel_center[1]
@@ -62,9 +70,9 @@ def handle_display(state, iteration):
     # acceleration in x:
     acc_x_text = font.render('x acceleration:', True, white, black)
     acc_x_text_rect = acc_x_text.get_rect()
-    acc_x_text_rect.center = (270, 4*LINE_LENGTH)
+    acc_x_text_rect.center = (370, 4*LINE_LENGTH)
     display.blit(acc_x_text, acc_x_text_rect)
-    acc_center = (450, 4*LINE_LENGTH)
+    acc_center = (550, 4*LINE_LENGTH)
     acc_line_length = abs(state['acceleration']/bounds['max_acceleration']) * LINE_LENGTH
     angle = state['x_tilt'] * 2 * math.pi
     acc_x_component = -1 * acc_line_length * math.cos(angle) + acc_center[0]
@@ -76,9 +84,9 @@ def handle_display(state, iteration):
     # acceleration in z:
     acc_z_text = font.render('z acceleration:', True, white, black)
     acc_z_text_rect = acc_z_text.get_rect()
-    acc_z_text_rect.center = (640, 4*LINE_LENGTH)
+    acc_z_text_rect.center = (740, 4*LINE_LENGTH)
     display.blit(acc_z_text, acc_z_text_rect)
-    acc_center = (820, 4*LINE_LENGTH)
+    acc_center = (920, 4*LINE_LENGTH)
     angle = state['z_tilt'] * 2 * math.pi
     acc_x_component = -1 * acc_line_length * math.cos(angle) + acc_center[0]
     acc_y_component = -1 * acc_line_length * math.sin(angle) + acc_center[1]
@@ -89,9 +97,9 @@ def handle_display(state, iteration):
     # wind
     wind_text = font.render('wind:', True, white, black)
     wind_text_rect = wind_text.get_rect()
-    wind_text_rect.center = (1000, LINE_LENGTH)
+    wind_text_rect.center = (1100, LINE_LENGTH)
     display.blit(wind_text, wind_text_rect)
-    wind_center = (1100, LINE_LENGTH)
+    wind_center = (1200, LINE_LENGTH)
     wind_line_length = abs(state['wind']) * LINE_LENGTH
     angle = state['wind_direction'] * 2 * math.pi
     wind_x_component = -1 * wind_line_length * math.cos(angle) + wind_center[0]
@@ -103,9 +111,9 @@ def handle_display(state, iteration):
     # fuel
     fuel_text = font.render('fuel:', True, white, black)
     fuel_text_rect = fuel_text.get_rect()
-    fuel_text_rect.center = (1000, 4*LINE_LENGTH)
+    fuel_text_rect.center = (1100, 4*LINE_LENGTH)
     display.blit(fuel_text, fuel_text_rect)
-    fuel_center = (1100, 3*LINE_LENGTH)
+    fuel_center = (1200, 3*LINE_LENGTH)
     fuel_size = (LINE_LENGTH/2, LINE_LENGTH*2)
     fuel_ratio = state['fuel']/bounds['max_fuel']
     fuel_height = int(2*LINE_LENGTH * fuel_ratio)
@@ -129,7 +137,7 @@ def handle_display(state, iteration):
     pygame.display.update()
 
 
-def launch(rocket, iteration):
+def launch(rocket, iteration, MULTIPLE_AI):
     global x_pixels, z_pixels
 
     x_pixels = set()
@@ -143,7 +151,7 @@ def launch(rocket, iteration):
         add_pixels(state)
         if crashed or user_exit:
             break
-        user_exit = handle_display(state, iteration)
+        user_exit = handle_display(state, iteration, MULTIPLE_AI)
         # clock.tick(CLOCK_SPEED)  # remove this for no set fps
     if user_exit:
         return

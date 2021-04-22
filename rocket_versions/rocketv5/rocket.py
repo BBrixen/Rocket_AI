@@ -15,7 +15,7 @@ assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
 config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 # -------------------------------training-------------------------------
-MAX_GAMES = 20
+MAX_GAMES = 10
 num_of_games = 0
 TRAINING_FREQUENCY = 5
 RANDOMIZE_CONSTANT = MAX_GAMES  # stops being random after [randomize_constant] many games
@@ -31,6 +31,7 @@ decision_times = []
 frame_times = []
 prev_time = None
 
+MULTIPLE_AI = True  # if false, there is only 1 ai
 LOADING_MODEL = False
 SAVING_MODEL = True
 TRAINING_METHOD = 1
@@ -39,30 +40,69 @@ TRAINING_METHOD = 1
 
 # -------------------------------model architecture-------------------------------
 INPUT_SIZE = len(all_value_names) + 1  # +1 to account for has_left_ground
-model = models.Sequential([
-    layers.Flatten(input_shape=(INPUT_SIZE,)),
-    layers.Dense(30, activation='relu'),
-    layers.Dense(10, activation='relu'),
-    layers.Dense(3, activation='sigmoid')
-    # softmax is for classification of many different things
-    # (like classifying between 10 different animals)
-    # sigmoid compresses the value between 0 and 1 but not for classification
-])
-model.compile(optimizer='adam',
-              loss='categorical_crossentropy',
-              # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
-              metrics=['accuracy'])
+if MULTIPLE_AI:
+    engine_model = models.Sequential([
+        layers.Flatten(input_shape=(INPUT_SIZE,)),
+        layers.Dense(30, activation='relu'),
+        layers.Dense(10, activation='relu'),
+        layers.Dense(1, activation='sigmoid')
+        # softmax is for classification of many different things
+        # (like classifying between 10 different animals)
+        # sigmoid compresses the value between 0 and 1 but not for classification
+    ])
+    engine_model.compile(optimizer='adam',
+                         loss='sparse_categorical_crossentropy',
+                         # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
+                         metrics=['accuracy'])
 
-# -------------------------------checkpoints-------------------------------
-checkpoint_dir = '../../rocket_v4_checkpoints'
-checkpoint_prefix = os.path.join(checkpoint_dir, 'ckpt_{epoch}')
-checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-    filepath=checkpoint_prefix,
-    save_weights_only=True
-)
+    x_tilt_model = models.Sequential([
+        layers.Flatten(input_shape=(INPUT_SIZE,)),
+        layers.Dense(30, activation='relu'),
+        layers.Dense(10, activation='relu'),
+        layers.Dense(1, activation='sigmoid')
+        # softmax is for classification of many different things
+        # (like classifying between 10 different animals)
+        # sigmoid compresses the value between 0 and 1 but not for classification
+    ])
+    x_tilt_model.compile(optimizer='adam',
+                         loss='sparse_categorical_crossentropy',
+                         # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
+                         metrics=['accuracy'])
 
-if LOADING_MODEL:
-    model = models.load_model('rocket_v4.h5')
+    z_tilt_model = models.Sequential([
+        layers.Flatten(input_shape=(INPUT_SIZE,)),
+        layers.Dense(30, activation='relu'),
+        layers.Dense(10, activation='relu'),
+        layers.Dense(1, activation='sigmoid')
+        # softmax is for classification of many different things
+        # (like classifying between 10 different animals)
+        # sigmoid compresses the value between 0 and 1 but not for classification
+    ])
+    z_tilt_model.compile(optimizer='adam',
+                         loss='sparse_categorical_crossentropy',
+                         # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
+                         metrics=['accuracy'])
+
+    if LOADING_MODEL:
+        engine_model = models.load_model('rocket_engine_v5.h5')
+        x_tilt_model = models.load_model('rocket_x_tilt_v5.h5')
+        z_tilt_model = models.load_model('rocket_z_tilt_v5.h5')
+else:
+    model = models.Sequential([
+        layers.Flatten(input_shape=(INPUT_SIZE,)),
+        layers.Dense(30, activation='relu'),
+        layers.Dense(10, activation='relu'),
+        layers.Dense(3, activation='sigmoid')
+        # softmax is for classification of many different things
+        # (like classifying between 10 different animals)
+        # sigmoid compresses the value between 0 and 1 but not for classification
+    ])
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
+                  metrics=['accuracy'])
+    if LOADING_MODEL:
+        model = models.load_model('rocket_v4.h5')
 
 
 class Rocket:
@@ -73,7 +113,7 @@ class Rocket:
         # training data
         self.training_data = set()
 
-        launch(self, 0)
+        launch(self, 0, MULTIPLE_AI)
 
     def reset_state(self):
         # resets all values for first or next run
@@ -113,7 +153,7 @@ class Rocket:
 
         cur_time = time.perf_counter()
         if prev_time is not None:
-            diff = cur_time - prev_time
+            diff = cur_time-prev_time
             frame_times.append(diff)
         prev_time = cur_time
 
@@ -175,14 +215,28 @@ class Rocket:
 
         # this is where the ai will give an output
         squished_state = self.squish_state()  # accessing current state of rocket for inputs
+        predictions = []
 
         time_before_predictions = time.perf_counter()
 
-        predictions = model.predict(np.array([squished_state]))  # generating command based on state
-        predictions = predictions[0]  # accessing array of values from 2d array given
+        if MULTIPLE_AI:
+            engine_prediction = engine_model.predict(np.array([squished_state]))  # generating command based on state
+            engine_prediction = engine_prediction[0][0]  # accessing array of values from 2d array given
+            predictions.append(engine_prediction)
+
+            x_tilt_prediction = x_tilt_model.predict(np.array([squished_state]))
+            x_tilt_prediction = x_tilt_prediction[0][0]
+            predictions.append(x_tilt_prediction)
+
+            z_tilt_prediction = z_tilt_model.predict(np.array([squished_state]))
+            z_tilt_prediction = z_tilt_prediction[0][0]
+            predictions.append(z_tilt_prediction)
+        else:
+            predictions = model.predict(np.array([squished_state]))  # generating command based on state
+            predictions = predictions[0]  # accessing array of values from 2d array given
 
         time_after_predictions = time.perf_counter()
-        diff = time_after_predictions-time_before_predictions
+        diff = time_after_predictions - time_before_predictions
         decision_times.append(diff)
 
         predictions = randomize_output(predictions)  # adding a level of randomness for ai training
@@ -201,7 +255,6 @@ class Rocket:
 
         global num_of_games
         global overall_training_data
-        global model
         global all_max_ys, all_max_xs, all_max_zs
 
         # printing overall data for me
@@ -236,7 +289,7 @@ class Rocket:
         print('finished game #', num_of_games)
 
         # continuing to play
-        launch(self, num_of_games)
+        launch(self, num_of_games, MULTIPLE_AI)
 
     def squish_state(self):
         # squishing values between 0 and 1
@@ -259,15 +312,29 @@ class Rocket:
 
 def train(training_set):
     # trains the model to the current training data and saves it
-    global model
+    global engine_model, x_tilt_model, z_tilt_model, model
 
     # converting set of tuples of lists into 2 2d lists
     inputs = [list(input_data) for input_data, output_data in training_set]
-    outputs = [list(output_data) for input_data, output_data in training_set]
+    all_outputs = [list(output_data) for input_data, output_data in training_set]
 
-    model.fit(inputs, outputs, epochs=10, verbose=1, callbacks=[checkpoint_callback])
-    if SAVING_MODEL:
-        model.save('rocket_v4.h5')
+    if MULTIPLE_AI:
+        engine_outputs = [i[0] for i in all_outputs]
+        x_tilt_outputs = [i[1] for i in all_outputs]
+        z_tilt_outputs = [i[2] for i in all_outputs]
+
+        engine_model.fit(inputs, engine_outputs, epochs=10, verbose=1)
+        x_tilt_model.fit(inputs, x_tilt_outputs, epochs=10, verbose=1)
+        z_tilt_model.fit(inputs, z_tilt_outputs, epochs=10, verbose=1)
+
+        if SAVING_MODEL:
+            engine_model.save('rocket_engine_v5.h5')
+            x_tilt_model.save('rocket_x_tilt_v5.h5')
+            z_tilt_model.save('rocket_z_tilt_v5.h5')
+    else:
+        model.fit(inputs, all_outputs, epochs=10, verbose=1)
+        if SAVING_MODEL:
+            model.save('rocket_v4.h5')
 
 
 def randomize_output(predicted_outputs):
@@ -292,15 +359,21 @@ counter = 0
 for t in decision_times:
     total += t
     counter += 1
+if counter == 0:
+    print('no decision times to calculate')
+    counter = 1
 avg = total / counter
-print('V4 | average time for 1 decision:', avg)
+print('V5 | average time for 1 decision:', avg)
 total = 0
 counter = 0
 for t in frame_times:
     total += t
     counter += 1
+if counter == 0:
+    print('no frame times to calculate')
+    counter = 1
 avg = total / counter
-print('V4 | average time for 1 loop: ', avg)
+print('V5 | average time for 1 loop: ', avg)
 
 # graphing
 y = np.linspace(1, len(all_max_ys), len(all_max_ys))
@@ -314,4 +387,4 @@ plt.plot(z, all_max_zs, 'o-', color='b')
 plt.xlabel("Rocket Iteration")
 plt.ylabel("Value r, g, b = x, y, z")
 plt.title('Rocket data')
-plt.savefig('rocket_v4.png')
+plt.savefig('rocket_v5.png')

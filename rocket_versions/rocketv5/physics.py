@@ -7,7 +7,7 @@ from perlin_noise import PerlinNoiseFactory
 # if we want meters per second we must define that 1 frame is 1 second
 FORCE_FROM_THRUST = 800  # how much the acceleration increases from thrust, measured in N
 THRUST_PER_UNIT_FUEL = 1  # how much thrust from 1 unit of fuel
-TILT_RATIO = 0.5  # how much the rocket tilts in frame
+TILT_RATIO = 0.5  # how much the rocket tilts in 1 frame
 FORCE_FROM_WIND = 100  # multiplied by wind (value from 0-1), measured in N
 MASS = 20  # kg
 ACCELERATION_FROM_GRAVITY = -9.8
@@ -169,6 +169,7 @@ def apply_physics(state, actions):
     vel_angle_z = math.atan2(xy_projection_magnitude, velocity_z) / (2 * math.pi)
     state['x_direction'] = vel_angle_x
     state['z_direction'] = vel_angle_z
+
     state['time'] += 1
 
     return apply_bounds(state)  # this can be called earlier if data needs to be changed after applying bounds
