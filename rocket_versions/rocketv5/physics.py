@@ -7,7 +7,7 @@ from perlin_noise import PerlinNoiseFactory
 # if we want meters per second we must define that 1 frame is 1 second
 FORCE_FROM_THRUST = 800  # how much the acceleration increases from thrust, measured in N
 THRUST_PER_UNIT_FUEL = 1  # how much thrust from 1 unit of fuel
-TILT_RATIO = 0.5  # how much the rocket tilts in 1 frame
+TILT_RATIO = 0.1  # how much the rocket tilts in 1 frame
 FORCE_FROM_WIND = 100  # multiplied by wind (value from 0-1), measured in N
 MASS = 20  # kg
 ACCELERATION_FROM_GRAVITY = -9.8

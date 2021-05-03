@@ -32,9 +32,9 @@ frame_times = []
 prev_time = None
 
 MULTIPLE_AI = True  # if false, there is only 1 ai
-LOADING_MODEL = False
+LOADING_MODEL = True
 SAVING_MODEL = True
-TRAINING_METHOD = 1
+TRAINING_METHOD = 2
 # method 1: set training_data to false if the rocket is moving away from the vertical origin
 # method 2: set training_data to true if the rocket it moving towards the vertical origin
 
@@ -102,7 +102,7 @@ else:
                   # categorical_crossentropy for 1 AI, sparse_categorical_crossentropy for multiple AIs
                   metrics=['accuracy'])
     if LOADING_MODEL:
-        model = models.load_model('rocket_v4.h5')
+        model = models.load_model('rocket_v5.h5')
 
 
 class Rocket:
@@ -169,15 +169,11 @@ class Rocket:
         cur_x = abs(self.state['x'] - (0.5 * bounds['max_x']))
         cur_z = abs(self.state['z'] - (0.5 * bounds['max_z']))
         if TRAINING_METHOD == 1:
-            if cur_x > previous_x:
-                use_data = False
-            if cur_z > previous_z:
+            if cur_x > previous_x or cur_z > previous_z:
                 use_data = False
         else:
-            if cur_x <= previous_x:
-                # method 2
-                use_data = True
-            if cur_z <= previous_z:
+            # method 2
+            if cur_x <= previous_x and cur_z <= previous_z:
                 use_data = True
         previous_x = cur_x
         previous_z = cur_z
@@ -334,7 +330,7 @@ def train(training_set):
     else:
         model.fit(inputs, all_outputs, epochs=10, verbose=1)
         if SAVING_MODEL:
-            model.save('rocket_v4.h5')
+            model.save('rocket_v5.h5')
 
 
 def randomize_output(predicted_outputs):
@@ -385,6 +381,10 @@ plt.plot(x, all_max_xs, 'o-', color='r')
 z = np.linspace(1, len(all_max_zs), len(all_max_zs))
 plt.plot(z, all_max_zs, 'o-', color='b')
 plt.xlabel("Rocket Iteration")
-plt.ylabel("Value r, g, b = x, y, z")
-plt.title('Rocket data')
-plt.savefig('rocket_v5.png')
+plt.ylabel("Value r, g, b = x, y, z\n(m)")
+if MULTIPLE_AI:
+    plt.title('Multiple AIs')
+    plt.savefig('multiple_ais_v5.png')
+else:
+    plt.title('Singular AI')
+    plt.savefig('singular_ai_v5.png')

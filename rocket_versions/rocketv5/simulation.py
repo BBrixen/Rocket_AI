@@ -1,6 +1,7 @@
 import pygame
 from physics import bounds
 import math
+import sys
 
 white = (255, 255, 255)
 light_green = (100, 255, 100)
@@ -154,7 +155,7 @@ def launch(rocket, iteration, MULTIPLE_AI):
         user_exit = handle_display(state, iteration, MULTIPLE_AI)
         # clock.tick(CLOCK_SPEED)  # remove this for no set fps
     if user_exit:
-        return
+        sys.exit("User exited")
 
     rocket.has_crashed()
 
